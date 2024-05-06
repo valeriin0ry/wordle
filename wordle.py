@@ -1,385 +1,111 @@
-from tkinter import ttk
-from pathlib import Path
-
+from tkinter import messagebox
 import tkinter as tk
 import random
-import string
-import sys
 
 
-WORD_LEN = 5
-MAX_TRIES = 6
-COLOR_BORDER_HIGHLIGHT = "#565758"
-COLOR_BLANK = "#121213"
-COLOR_INCORRECT = "#3a3a3c"
-COLOR_HALF_CORRECT = "#b59f3b"
-COLOR_CORRECT = "#538d4e"
-BOX_SIZE = 55
-PADDING = 3
-
-try:
-    BASE_PATH = Path(sys._MEIPASS)
-except AttributeError:
-    BASE_PATH = Path(".")
-
-VALID_WORDS_WORDLIST = BASE_PATH / "wordlists/wordle-allowed-guesses.txt"
-ANSWERS_WORDLIST = BASE_PATH / "wordlists/wordle-answers.txt"
-APP_ICON = BASE_PATH / "assets/wordle_logo_32x32.png"
-BACKSPACE_ICON = BASE_PATH / "assets/backspace.png"
-HELP_ICON = BASE_PATH / "assets/help.png"
-SETTINGS_ICON = BASE_PATH / "assets/settings.png"
-MANUAL_IMAGE = BASE_PATH / "assets/manual_image2.png"
-
-ANSWERS = set(word.upper() for word in open(ANSWERS_WORDLIST).read().splitlines())
-ALL_WORDS = (
-    set(word.upper() for word in open(VALID_WORDS_WORDLIST).read().splitlines())
-    | ANSWERS
-)
-class HelpScreen(tk.Frame):
-    def __init__(self, master, controller, *args, **kwargs):
-        tk.Frame.__init__(self, master, *args, **kwargs)
-        self.controller = controller
-
-        tk.Label(self, text="Help").grid()
-class SettingsScreen(tk.Frame):
-    def __init__(self, master, controller, *args, **kwargs):
-        tk.Frame.__init__(self, master, *args, **kwargs)
-        self.controller = controller
-
-        tk.Label(self, text="Settings").grid()
-
-class MainScreen(tk.Frame):
-    def __init__(self, master, controller, *args, **kwargs):
-        tk.Frame.__init__(self, master, *args, **kwargs)
-        self.controller = controller
-
-        self.bind("<Return>", self.check_word)
-        self.bind("<BackSpace>", self.remove_letter)
-        self.bind("<Key>", self.enter_letter)
-
-        self.init_ui()
-        self.new_game()
-
-    def new_game(self):
-        self.answer = random.choice(list(ANSWERS)).upper()
-        self.words = [""] * 6
-        self.correct_letters = set()
-        self.half_correct_letter = set()
-        self.incorrect_letters = set()
-        for i in range(MAX_TRIES):
-            self.current_word = i
-            self.update_labels()
-        self.current_word = 0
-        self.update_keyboard()
-        self.game_over_dialog.place_forget()
-    def congratulate(self):
-        praises = ["Genius", "Magnificent", "Impressive", "Splendid", "Great", "Phew"]
-        self.game_over_dialog_title.set(praises[self.current_word] + "!")
-        self.game_over_dialog_message.set("Wanna Play Another Game?")
-        self.game_over_dialog.place(relx=0.5, rely=0.5, anchor="center")
-
-    def humiliate(self):
-        self.game_over_dialog_title.set("Better Luck Next Time!")
-        self.game_over_dialog_message.set(
-            f"One More Game?\n(BTW the word was {self.answer})"
-        )
-        self.game_over_dialog.place(relx=0.5, rely=0.5, anchor="center")
-
-    def init_ui(self):
-        self.icons = {
-            "settings": tk.PhotoImage(file=SETTINGS_ICON),
-            "help": tk.PhotoImage(file=HELP_ICON),
-            "backspace": tk.PhotoImage(file=BACKSPACE_ICON),
-        }
-        container = tk.Frame(self, bg=COLOR_BLANK, height=40)
-        container.grid(sticky="we")
-        container.grid_columnconfigure(1, weight=1)
-        tk.Button(
-            container,
-            image=self.icons["help"],
-            bg=COLOR_BLANK,
-            border=0,
-            cursor="hand2",
-            command=lambda: self.controller.show_frame("HelpScreen"),
-        ).grid(row=0, column=0)
-        tk.Label(
-            container,
-            text="WORDLE",
-            fg="#d7dadc",
-            bg=COLOR_BLANK,
-            font=("Helvetica Neue", 28, "bold"),
-        ).grid(row=0, column=1)
-        tk.Button(
-            container,
-            image=self.icons["settings"],
-            bg=COLOR_BLANK,
-            border=0,
-            cursor="hand2",
-            command=lambda: self.controller.show_frame("SettingsScreen"),
-        ).grid(row=0, column=2)
-        ttk.Separator(self).grid(sticky="ew")
-        self.top_separator = tk.Frame(self, bg=COLOR_BLANK, height=45)
-        self.top_separator.grid_rowconfigure(0, weight=1)
-        self.top_separator.grid_columnconfigure(0, weight=1)
-        self.top_separator.grid_propagate(False)
-        self.top_separator.grid(sticky="news")
-        self.rowconfigure(3, weight=1)
-
-        container = tk.Frame(self, bg=COLOR_BLANK)
-        container.grid()
-
-        self.labels = []
-        for i in range(MAX_TRIES):
-            row = []
-            for j in range(WORD_LEN):
-                cell = tk.Frame(
-                    container,
-                    width=BOX_SIZE,
-                    height=BOX_SIZE,
-                    highlightthickness=1,
-                    highlightbackground=COLOR_INCORRECT,
-                )
-                cell.grid_propagate(0)
-                cell.grid_rowconfigure(0, weight=1)
-                cell.grid_columnconfigure(0, weight=1)
-                cell.grid(row=i, column=j, padx=PADDING, pady=PADDING)
-                t = tk.Label(
-                    cell,
-                    text="",
-                    justify="center",
-                    font=("Helvetica Neue", 24, "bold"),
-                    bg=COLOR_BLANK,
-                    fg="#d7dadc",
-                    highlightthickness=1,
-                    highlightbackground=COLOR_BLANK,
-                )
-                t.grid(sticky="nswe")
-                row.append(t)
-            self.labels.append(row)
-        tk.Frame(self, bg=COLOR_BLANK, height=45).grid()
-        container = tk.Frame(self, bg=COLOR_BLANK)
-        container.grid()
-        self.keyboard_buttons = {}
-        for i, keys in enumerate(["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]):
-            row = tk.Frame(container, bg=COLOR_BLANK)
-            row.grid(row=i, column=0)
-
-            for j, c in enumerate(keys):
-                if i == 2:  
-                    j += 1
-
-                cell = tk.Frame(
-                    row,
-                    width=40,
-                    height=55,
-                    highlightthickness=1,
-                    highlightbackground=COLOR_INCORRECT,
-                )
-                cell.grid_propagate(0)
-                cell.grid_rowconfigure(0, weight=1)
-                cell.grid_columnconfigure(0, weight=1)
-                cell.grid(row=0, column=j, padx=PADDING, pady=PADDING)
-                btn = tk.Button(
-                    cell,
-                    text=c,
-                    justify="center",
-                    font=("Helvetica Neue", 13),
-                    bg=COLOR_BLANK,
-                    fg="#d7dadc",
-                    cursor="hand2",
-                    border=0,
-                    command=lambda c=c: self.enter_letter(key=c),
-                )
-                btn.grid(sticky="nswe")
-                self.keyboard_buttons[c] = btn
-
-        for col in (0, 8):
-            text = "ENTER" if col == 0 else ""
-            func = self.check_word if col == 0 else self.remove_letter
-            cell = tk.Frame(
-                row,
-                width=75,
-                height=55,
-                highlightthickness=1,
-                highlightbackground=COLOR_INCORRECT,
-            )
-            cell.grid_propagate(0)
-            cell.grid_rowconfigure(0, weight=1)
-            cell.grid_columnconfigure(0, weight=1)
-            cell.grid(row=0, column=col, padx=PADDING, pady=PADDING)
-            btn = tk.Button(
-                cell,
-                text=text,
-                justify="center",
-                font=("Helvetica Neue", 13),
-                bg=COLOR_BLANK,
-                fg="#d7dadc",
-                cursor="hand2",
-                border=0,
-                command=func,
-            )
-            btn.grid(row=0, column=0, sticky="nswe")
-        btn.configure(image=self.icons["backspace"])
-        self.game_over_dialog = tk.Frame(self, bg=COLOR_INCORRECT, highlightthickness=2)
-        self.game_over_dialog_title = tk.StringVar()
-        tk.Label(
-            self.game_over_dialog,
-            textvariable=self.game_over_dialog_title,
-            font=("Helvetica Neue", 22),
-            bg=COLOR_INCORRECT,
-            fg="white",
-        ).grid(sticky="news", padx=10, pady=10)
-        ttk.Separator(self.game_over_dialog).grid(sticky="ew")
-        self.game_over_dialog_message = tk.StringVar()
-        tk.Label(
-            self.game_over_dialog,
-            textvariable=self.game_over_dialog_message,
-            font=("Arial", 16),
-            bg=COLOR_INCORRECT,
-            fg="white",
-        ).grid(sticky="news", padx=10, pady=10)
-        ttk.Separator(self.game_over_dialog).grid(sticky="ew")
-        self.game_over_dialog.grid_rowconfigure(4, weight=1)
-        f = tk.Frame(self.game_over_dialog, bg=COLOR_INCORRECT)
-        f.grid(sticky="news")
-        f.grid_columnconfigure(0, weight=1)
-        f.grid_columnconfigure(2, weight=1)
-        for col in (0, 2):
-            btn_text = "Hell Yeah!" if col == 0 else "Nah"
-            func = self.new_game if col == 0 else self.controller.destroy
-            bg = "#4caf50" if col == 0 else "tomato"
-            btn = tk.Button(
-                f,
-                text=btn_text,
-                bg=COLOR_INCORRECT,
-                fg="white",
-                font=("Helvetica Neue", 13),
-                border=0,
-                cursor="hand2",
-                command=func,
-            )
-            btn.bind("<Enter>", lambda e, btn=btn, bg=bg: btn.config(bg=bg))
-            btn.bind("<Leave>", lambda e, btn=btn: btn.config(bg=COLOR_INCORRECT))
-            btn.grid(row=0, column=col, sticky="ew")
-        ttk.Separator(f, orient="vertical").grid(row=0, column=1, sticky="ns")
-    def toast(self, message, duration=2):
-        t = tk.Label(self.top_separator, text=message, font=("Helvetica Neue", 16))
-        t.grid(row=0, column=0, sticky="news", padx=5, pady=5)
-        self.master.after(duration * 1000, lambda: t.grid_remove())
-
-    def update_keyboard(self):
-        for key, btn in self.keyboard_buttons.items():
-            if key in self.correct_letters:
-                btn["bg"] = COLOR_CORRECT
-            elif key in self.half_correct_letter:
-                btn["bg"] = COLOR_HALF_CORRECT
-            elif key in self.incorrect_letters:
-                btn["bg"] = COLOR_INCORRECT
+root = tk.Tk()
+root.title('Wordle')
+root.geometry("1152x864")
+frame = tk.Frame(root)
+frame.pack()
+green = '#27e512'
+yellow = '#e8ef0e'
+gray = '#4c4c4c'
+font = 'Verdana, 38'
+letters = []
+letter_count = 0
+guess = ''
+words = []
+winner = False
+with open('words.txt', 'r') as file:
+    data = file.readlines()
+    for i in data:
+        words.append(i[:-1])
+def win_lose(winner):
+    if not winner:
+        title = 'You Lose'
+        message = f'The word was {word}'
+    else:
+        title = 'You Win'
+        message = 'Well done, you got it in {} guess(s)'.format(int(letter_count / 5))
+    play_again = messagebox.askquestion(title=title, message=f'{message}.\nWould you like to play again?')
+    if play_again == 'yes':
+        layout()
+    else:
+        root.destroy()
+        quit()
+def go_again():
+    for i in range(5):
+        letters[letter_count + i]['text'] = ' '
+def check_word(guess):
+    global winner
+    btn_index = letter_count - 5
+    for i, letter in enumerate(guess):
+        if letter == word[i]:
+            letters[btn_index + i]['bg'] = green
+            letters[btn_index + i]['activebackground'] = green
+        elif letter in word:
+            if guess.count(letter) >= 1 and guess.count(letter) == word.count(letter):
+                letters[btn_index + i]['bg'] = yellow
+                letters[btn_index + i]['activebackground'] = yellow
             else:
-                btn["bg"] = COLOR_BLANK
-    def update_labels(self, colors=None):
-        word = self.words[self.current_word]
-        for i, label in enumerate(self.labels[self.current_word]):
-            try:
-                letter = word[i]
-            except IndexError:
-                letter = ""
-
-            label["text"] = letter
-            if colors:
-                label["bg"] = colors[i]
-                label["highlightbackground"] = colors[i]
-            else:
-                label["bg"] = COLOR_BLANK
-                label["highlightbackground"] = (
-                    COLOR_BORDER_HIGHLIGHT if letter else COLOR_BLANK
-                )
-    def check_word(self, event=None):
-        print("checking word:", self.words[self.current_word])
-        word = self.words[self.current_word]
-        if len(word) < WORD_LEN:
-            self.toast("Not Enough Letters")
-            return
-        if word not in ALL_WORDS:
-            self.toast("Not in word list")
-            return
-
-        colors = []
-        freq = {c: self.answer.count(c) for c in self.answer}
-        for x, y in zip(word, self.answer):
-            if x == y:
-                colors.append(COLOR_CORRECT)
-                self.correct_letters.add(x)
-            elif freq.get(x, 0) > 0:
-                colors.append(COLOR_HALF_CORRECT)
-                self.half_correct_letter.add(x)
-                freq[x] -= 1
-            else:
-                self.incorrect_letters.add(x)
-                colors.append(COLOR_INCORRECT)
-        self.update_labels(colors)
-        self.update_keyboard()
-
-        self.current_word += 1
-        if word == self.answer:
-            self.congratulate()
-        elif self.current_word >= MAX_TRIES:
-            self.humiliate()
-
-    def remove_letter(self, event=None):
-        if self.words[self.current_word]:
-            print(self.words[self.current_word][-1], "was deleted.")
-            self.words[self.current_word] = self.words[self.current_word][:-1]
-            self.update_labels()
-
-    def enter_letter(self, event=None, key=None):
-        key = key or event.keysym.upper()
-        if key in string.ascii_uppercase:
-            print(key, "was entered.")
-            self.words[self.current_word] += key
-            self.words[self.current_word] = self.words[self.current_word][:WORD_LEN]
-            self.update_labels()
-class WordleApp(tk.Tk):
-    def __init__(self, *args, **kwargs):
-        tk.Tk.__init__(self, *args, **kwargs)
-        self.title("Wordle - A Word Game")
-        self.state("zoomed")
-        self.app_icon = tk.PhotoImage(file=APP_ICON)
-        self.iconphoto(False, self.app_icon)
-        container = tk.Frame(self, bg=COLOR_BLANK)
-        container.grid(sticky="news")
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=1)
-        container.grid_rowconfigure(0, weight=1)
-        container.grid_columnconfigure(0, weight=1)
-        self.frames = {}
-        self.frames["MainScreen"] = MainScreen(
-            master=container, controller=self, bg=COLOR_BLANK
-        )
-        self.frames["SettingsScreen"] = SettingsScreen(
-            master=container, controller=self, bg=COLOR_BLANK
-        )
-        self.frames["HelpScreen"] = HelpScreen(
-            master=container, controller=self, bg=COLOR_BLANK
-        )
-        self.frames["MainScreen"].grid(row=0, column=0, sticky="ns")
-        self.frames["SettingsScreen"].grid(row=0, column=0, sticky="news")
-        self.frames["HelpScreen"].grid(row=0, column=0, sticky="news")
-        self.show_frame("MainScreen")
-        self.fullscreen = False
-        self.bind("<F11>", self.fullscreen_toggle)
-    def show_frame(self, page_name):
-        frame = self.frames[page_name]
-        frame.focus_set()
-        frame.tkraise()
-    def fullscreen_toggle(self, event=None):
-        if self.fullscreen:
-            self.wm_attributes("-fullscreen", False)
-            self.fullscreen = False
+                letters[btn_index + i]['bg'] = gray
+                letters[btn_index + i]['activebackground'] = gray
         else:
-            self.wm_attributes("-fullscreen", True)
-            self.fullscreen = True
+            letters[btn_index + i]['bg'] = gray
+            letters[btn_index + i]['activebackground'] = gray
+    if guess == word:
+        winner = True
+        win_lose(winner)
+def key_pressed(letter):
+    global letter_count, guess
+    if not winner:
+        if letter in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 
+                      'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']:
+            if letter_count <= 29:
+                letters[letter_count]['text'] = letter.upper()
+                guess = guess + letter.upper()
+                letter_count += 1
+                if letter_count % 5 == 0:
+                    if guess.lower() in words:
+                        check_word(guess)
+                        guess = ''
+                    else:
+                        letter_count -= 5
+                        go_again()
+                        guess = ''
+            if letter_count == 30:
+                win_lose(winner)
 
+def create_keyboard_buttons(keyboard_frame):
+    keys = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for key in keys:
+        tk.Button(keyboard_frame, text=key, width=3, command=lambda k=key: key_pressed(k.lower())).pack(side=tk.LEFT, padx=5)
 
-if __name__ == "__main__":
-    WordleApp().mainloop()
+def layout():
+    global frame, letter_count, winner, guess, word
+    frame.destroy()
+    frame = tk.Frame(root)
+    frame.pack()
+    letters.clear()
+    letter_count = 0
+    winner = False
+    guess = ''
+    word = random.choice(words).upper()
+    for row in range(6):
+        for col in range(5):
+            btn = tk.Button(frame, text=' ', width=3, bg='white',
+                            activebackground='white', font=font)
+            btn.grid(row=row, column=col, padx=5, pady=7)
+            letters.append(btn)
+    keyboard_frame = tk.Frame(root)
+    keyboard_frame.pack(pady=10)
+    create_keyboard_buttons(keyboard_frame) 
+
+    menu = tk.Menu(root)
+    root.config(menu=menu)
+    new_game = tk.Menu(menu, tearoff=0)
+    menu.add_cascade(label='Game', menu=new_game)
+    new_game.add_command(label='New Game', command=layout)
+layout()
+root.mainloop()
